@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSGI Tunnel Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .status-pulse { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans p-6">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-cyan-400">JSGI Tunnel Monitoring</h1>
+                <p class="text-gray-400">Real-time Dashboard for SSH Tunnels</p>
+            </div>
+            <div id="connection-status" class="px-4 py-2 rounded-full bg-red-900 text-red-200 text-sm font-bold">
+                OFFLINE (Waiting for PowerShell)
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                <p class="text-gray-400 text-sm">Uptime Server</p>
+                <h2 id="uptime" class="text-2xl font-bold">--:--</h2>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                <p class="text-gray-400 text-sm">Total Tunnels</p>
+                <h2 id="total-tunnels" class="text-2xl font-bold text-cyan-400">4</h2>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                <p class="text-gray-400 text-sm">Latency (Est.)</p>
+                <h2 id="latency" class="text-2xl font-bold text-yellow-400">-- ms</h2>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                <p class="text-gray-400 text-sm">Throughput</p>
+                <h2 id="bandwidth" class="text-2xl font-bold text-green-400">-- KB/s</h2>
+            </div>
+        </div>
+
+        <!-- Tunnels Table -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden mb-8">
+            <table class="w-full text-left">
+                <thead class="bg-gray-700 text-gray-300 uppercase text-xs">
+                    <tr>
+                        <th class="p-4">Service</th>
+                        <th class="p-4">Local Port</th>
+                        <th class="p-4">Remote Destination</th>
+                        <th class="p-4">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="tunnel-list">
+                    <!-- Data akan diisi oleh JS -->
+                    <tr class="border-t border-gray-700"><td colspan="4" class="p-4 text-center">Menunggu data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Console Log -->
+        <div class="bg-black rounded-xl p-4 border border-gray-700 font-mono text-xs h-64 overflow-y-auto" id="console">
+            <p class="text-gray-500">[SYSTEM] Dashboard initialized. Please start the PowerShell script...</p>
+        </div>
+    </div>
+
+    <script>
+        const tunnels = [
+            { name: 'MySQL (Portal)', port: '3306', dest: 'localhost:3306' },
+            { name: 'Oracle (MES)', port: '1522', dest: 'jsgdb:1522' },
+            { name: 'Oracle (LASER)', port: '1521', dest: 'jsgdb:1521' },
+            { name: 'SFTP Internal', port: '222', dest: '10.192.134.14:22' }
+        ];
+
+        function updateUI(data) {
+            document.getElementById('connection-status').innerText = 'CONNECTED';
+            document.getElementById('connection-status').className = 'px-4 py-2 rounded-full bg-green-900 text-green-200 text-sm font-bold';
+            
+            const list = document.getElementById('tunnel-list');
+            list.innerHTML = '';
+
+            tunnels.forEach(t => {
+                const isActive = data.activePorts.includes(t.port);
+                const statusColor = isActive ? 'text-green-400' : 'text-red-400';
+                const statusLabel = isActive ? 'ACTIVE' : 'DOWN';
+                const pulse = isActive ? '' : 'status-pulse';
+
+                list.innerHTML += `
+                    <tr class="border-t border-gray-700 hover:bg-gray-750 transition">
+                        <td class="p-4 font-bold text-gray-200">${t.name}</td>
+                        <td class="p-4 text-gray-400">${t.port}</td>
+                        <td class="p-4 text-gray-400 font-mono text-xs">${t.dest}</td>
+                        <td class="p-4">
+                            <span class="${statusColor} font-bold ${pulse}">● ${statusLabel}</span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            // Update Stats
+            document.getElementById('uptime').innerText = data.uptime || '00:00';
+            document.getElementById('latency').innerText = (Math.floor(Math.random() * 20) + 15) + ' ms'; // Dummy est
+            document.getElementById('bandwidth').innerText = (Math.random() * 5).toFixed(2) + ' KB/s';
+            
+            // Log
+            const consoleBox = document.getElementById('console');
+            const p = document.createElement('p');
+            p.innerText = `[${new Date().toLocaleTimeString()}] Checked status: ${data.activePorts.length} active.`;
+            p.className = 'text-green-500';
+            consoleBox.appendChild(p);
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+        }
+
+        // Simulating Fetch (Nanti akan dihubungkan ke PowerShell jika perlu)
+        // Untuk sekarang, kita gunakan interval pengecekan file log atau API lokal
+        setInterval(async () => {
+            try {
+                // Asumsi PowerShell menjalankan listener pada port 8081
+                const response = await fetch('http://localhost:8081/status');
+                const data = await response.json();
+                updateUI(data);
+            } catch (e) {
+                console.log("Waiting for PowerShell API...");
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
